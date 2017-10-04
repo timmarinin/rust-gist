@@ -5,7 +5,7 @@ use std;
 use std::fs::File;
 use std::collections::HashMap;
 use token::Token;
-use std::io::prelude::*;
+use std::io::{Read};
 
 #[derive(Debug, Serialize)]
 struct RequestBody {
@@ -108,7 +108,24 @@ impl Request {
   }
 
   pub fn from_stdin(&mut self) -> Result<&mut Request, Error> {
-    Ok(self)
+    let mut new_body = RequestBody {
+      public: self.public.clone(),
+      files: HashMap::new()
+    };
+
+    let mut buffer = String::new();
+    let stdin = std::io::stdin();
+    let mut handle = stdin.lock();
+    match handle.read_to_string(&mut buffer) {
+      Ok(_) => {
+        let mut file = HashMap::new();
+        file.insert("content".to_string(), buffer);
+        new_body.files.insert(String::from("stdin"), file);
+        self.body = new_body;
+        Ok(self)
+      },
+      Err(e) => Err(Error::NoFile(e))
+    }
   }
 
   pub fn from_file(&mut self, filename: String) -> Result<&mut Request, Error> {
