@@ -2,6 +2,8 @@
 authors = ["Tim Marinin <mt@marinin.xyz>"]
 name = "rust-gist"
 version = "0.1.0"
+license = "MIT"
+description = "Yet another Gist client"
 
 [dependencies]
 docopt = "0.8.1"
