@@ -2,6 +2,15 @@
 
 This is a changelog for `rust-gist`.
 
+## 0.1.2 (2017-10-06)
+
+Hotfix for 0.1.1: the behaviour was mixed up, it uploaded as anonymous without the flag,
+and as a token owner with the flag.
+
+Also the code was simplified leveraging the json! macro from serde_json.
+
+- [x] hotfix --anonymous
+
 ## 0.1.1 (2017-10-06)
 
 Minor feature release.
