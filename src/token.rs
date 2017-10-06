@@ -10,6 +10,10 @@ pub fn drop_token() -> Result<(), std::io::Error> {
   fs::remove_file(get_config_filename())
 }
 
+pub fn get_anonymous_token() -> Result<Token, std::io::Error> {
+  Ok(Token::new())
+}
+
 pub fn read_token() -> Result<Token, std::io::Error> {
   ensure_config_dir();
   let file = File::open(get_config_filename());

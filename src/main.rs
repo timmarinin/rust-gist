@@ -50,7 +50,11 @@ fn main() {
       token::drop_token().unwrap();
     }
   } else {
-    let tok = token::read_token();
+    let tok = if args.flag_anonymous {
+      token::read_token()
+    } else {
+      token::get_anonymous_token()
+    };
 
     let mut req = gist_api::Request::new(tok);
     req.public(args.flag_public);
