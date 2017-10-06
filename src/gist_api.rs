@@ -3,22 +3,15 @@ extern crate reqwest;
 
 use std;
 use std::fs::File;
-use std::collections::HashMap;
 use token::Token;
 use std::io::{Read};
-
-#[derive(Debug, Serialize)]
-struct RequestBody {
-   public: bool,
-   files: HashMap<String, HashMap<String, String>>
-}
 
 #[derive(Debug)]
 pub struct Request {
   token: Token,
   public: bool,
   filename: String,
-  body: RequestBody
+  text: String
 }
 
 #[derive(Deserialize, Debug)]
@@ -44,9 +37,9 @@ impl Request {
 
     Request {
       token: tok,
-      body: RequestBody { public: false, files: HashMap::new() },
       public: false,
-      filename: "".to_string()
+      text: String::new(),
+      filename: String::new()
     }
   }
 
@@ -56,33 +49,32 @@ impl Request {
   }
 
   fn create_request(&mut self) -> Result<(reqwest::Client, reqwest::Request), Error> {
-    let h = serde_json::to_string(&self.body);
-    let c = reqwest::Client::new();
-    
-    match h {
-      Err(_) =>  {
-        return Err(Error::BadInput(()))
-      },
-      Ok(h) => {
-        let mut req = c.post("https://api.github.com/gists");
-        req
-          .header(reqwest::header::ContentType::json())
-          .body(h);
-
-        if self.token != "" {
-          req.header(reqwest::header::Authorization(self.token.to_owned()));
-        }
-        
-        match req.build() {
-          Ok(built) => Ok((c, built)),
-          Err(e) => Err(Error::BadRequest(e))
+    let j = json!({
+      "public": self.public,
+      "files": {
+        self.filename.clone(): {
+          "content": self.text
         }
       }
+    });
+    let c = reqwest::Client::new();
+    let mut req = c.post("https://api.github.com/gists");
+    req
+      .header(reqwest::header::ContentType::json())
+      .body(j.to_string());
+
+    if self.token != "" {
+      req.header(reqwest::header::Authorization(self.token.to_owned()));
+    }
+    
+    match req.build() {
+      Ok(built) => Ok((c, built)),
+      Err(e) => Err(Error::BadRequest(e))
     }
   }
 
   pub fn execute(&mut self) -> Result<Response, Error> {
-    if self.body.files.len() == 0 {
+    if self.text.len() == 0 {
       return Err(Error::BadInput(()))
     }
     let (c, req) = self.create_request()?;
@@ -108,20 +100,13 @@ impl Request {
   }
 
   pub fn from_stdin(&mut self) -> Result<&mut Request, Error> {
-    let mut new_body = RequestBody {
-      public: self.public.clone(),
-      files: HashMap::new()
-    };
-
     let mut buffer = String::new();
     let stdin = std::io::stdin();
     let mut handle = stdin.lock();
     match handle.read_to_string(&mut buffer) {
       Ok(_) => {
-        let mut file = HashMap::new();
-        file.insert("content".to_string(), buffer);
-        new_body.files.insert(String::from("stdin"), file);
-        self.body = new_body;
+        self.filename = String::from("stdin");
+        self.text = buffer;
         Ok(self)
       },
       Err(e) => Err(Error::NoFile(e))
@@ -129,21 +114,14 @@ impl Request {
   }
 
   pub fn from_file(&mut self, filename: String) -> Result<&mut Request, Error> {
-    let mut new_body = RequestBody {
-      public: self.public.clone(),
-      files: HashMap::new()
-    };
-
     let file = File::open(filename.clone());
 
     match file {
       Ok(mut f) => {
         let mut s = String::new();
         f.read_to_string(&mut s).unwrap();
-        let mut fmap = HashMap::new();
-        fmap.insert("content".to_string(), s);
-        new_body.files.insert(filename.clone(), fmap);
-        self.body = new_body;
+        self.text = s;
+        self.filename = filename;
         Ok(self)
       },
       Err(e) => {
