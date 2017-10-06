@@ -1,4 +1,6 @@
 #[macro_use]
+extern crate serde_json;
+#[macro_use]
 extern crate serde_derive;
 extern crate docopt;
 
@@ -51,9 +53,9 @@ fn main() {
     }
   } else {
     let tok = if args.flag_anonymous {
-      token::read_token()
-    } else {
       token::get_anonymous_token()
+    } else {
+      token::read_token()
     };
 
     let mut req = gist_api::Request::new(tok);
