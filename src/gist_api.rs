@@ -5,6 +5,7 @@ use std;
 use std::fs::File;
 use token::Token;
 use std::io::Read;
+use errors::*;
 
 #[derive(Debug)]
 pub struct Request {
@@ -20,15 +21,8 @@ pub struct Response {
     pub url: String,
 }
 
-pub enum Error {
-    BadInput(()),
-    NoFile(std::io::Error),
-    BadRequest(reqwest::Error),
-    BadResponse(reqwest::StatusCode),
-}
-
 impl Request {
-    pub fn new(token: Result<Token, std::io::Error>) -> Request {
+    pub fn new(token: Result<Token>) -> Request {
         let mut tok = Token::new();
 
         if let Ok(t) = token {
@@ -48,15 +42,16 @@ impl Request {
         self
     }
 
-    fn create_request(&mut self) -> Result<(reqwest::Client, reqwest::Request), Error> {
-        let j = json!({
-      "public": self.public,
-      "files": {
-        self.filename.clone(): {
-          "content": self.text
-        }
-      }
-    });
+    fn create_request(&mut self) -> Result<(reqwest::Client, reqwest::Request)> {
+        let j = json!(
+        {
+            "public": self.public,
+            "files": {
+                self.filename.clone(): {
+                    "content": self.text
+                }
+            }
+        });
         let c = reqwest::Client::new();
         let mut req = c.post("https://api.github.com/gists");
         req.header(reqwest::header::ContentType::json())
@@ -66,19 +61,17 @@ impl Request {
             req.header(reqwest::header::Authorization(self.token.to_owned()));
         }
 
-        match req.build() {
-            Ok(built) => Ok((c, built)),
-            Err(e) => Err(Error::BadRequest(e)),
-        }
+        let built = req.build().chain_err(|| ErrorKind::BadRequest)?;
+        Ok((c, built))
     }
 
-    pub fn execute(&mut self) -> Result<Response, Error> {
+    pub fn execute(&mut self) -> Result<Response> {
         if self.text.len() == 0 {
-            return Err(Error::BadInput(()));
+           bail!(ErrorKind::BadInput)
         }
-        let (c, req) = self.create_request()?;
+        let (c, req) = self.create_request().chain_err(|| ErrorKind::BadRequest)?;
 
-        let mut resp = c.execute(req).unwrap();
+        let mut resp = c.execute(req).chain_err(|| ErrorKind::Network)?;
 
         match resp.status() {
             reqwest::StatusCode::Created => {
@@ -87,46 +80,31 @@ impl Request {
             }
             reqwest::StatusCode::UnprocessableEntity => {
                 let mut s = String::new();
-                resp.read_to_string(&mut s).unwrap();
-                println!("Response is NOT ok, body: {:?}", s);
-                Err(Error::BadResponse(resp.status()))
+                resp.read_to_string(&mut s)?;
+                bail!(ErrorKind::UnprocessableEntityResponse(s))
             }
             _ => {
-                println!("Something went wrong.\n{:?}", resp);
-                Err(Error::BadResponse(resp.status()))
+                bail!(ErrorKind::BadResponse(resp.status()))
             }
         }
     }
 
-    pub fn from_stdin(&mut self) -> Result<&mut Request, Error> {
+    pub fn from_stdin(&mut self) -> Result<&mut Request> {
         let mut buffer = String::new();
         let stdin = std::io::stdin();
         let mut handle = stdin.lock();
-        match handle.read_to_string(&mut buffer) {
-            Ok(_) => {
-                self.filename = String::from("stdin");
-                self.text = buffer;
-                Ok(self)
-            }
-            Err(e) => Err(Error::NoFile(e)),
-        }
+        handle.read_to_string(&mut buffer).chain_err(|| ErrorKind::BadInput)?;
+        self.filename = String::from("stdin");
+        self.text = buffer;
+        Ok(self)
     }
 
-    pub fn from_file(&mut self, filename: String) -> Result<&mut Request, Error> {
-        let file = File::open(filename.clone());
-
-        match file {
-            Ok(mut f) => {
-                let mut s = String::new();
-                f.read_to_string(&mut s).unwrap();
-                self.text = s;
-                self.filename = filename;
-                Ok(self)
-            }
-            Err(e) => {
-                println!("{}", e);
-                Err(Error::NoFile(e))
-            }
-        }
+    pub fn from_file(&mut self, filename: String) -> Result<&mut Request> {
+        let mut f = File::open(filename.clone()).chain_err(|| ErrorKind::BadInput)?;
+        let mut s = String::new();
+        f.read_to_string(&mut s).chain_err(|| ErrorKind::BadInput)?;
+        self.text = s;
+        self.filename = filename;
+        Ok(self)
     }
 }
