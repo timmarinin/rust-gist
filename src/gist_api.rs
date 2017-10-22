@@ -104,7 +104,7 @@ impl Request {
         let mut s = String::new();
         f.read_to_string(&mut s).chain_err(|| ErrorKind::BadInput)?;
         self.text = s;
-        self.filename = filename;
+        self.filename = String::from(filename.split('/').last().unwrap());
         Ok(self)
     }
 }
