@@ -104,7 +104,10 @@ impl Request {
         let mut s = String::new();
         f.read_to_string(&mut s).chain_err(|| ErrorKind::BadInput)?;
         self.text = s;
-        self.filename = filename;
+        self.filename = match filename.rsplit(std::path::MAIN_SEPARATOR).next() {
+            Some(x) => x.to_owned(),
+            None => filename.clone(),
+        };
         Ok(self)
     }
 }
